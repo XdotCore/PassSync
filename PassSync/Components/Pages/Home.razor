@@ -1,5 +1,20 @@
 ﻿@page "/"
+@using PassSync.Storage
 
-<button class="btn btn-primary float">
+@foreach(Password password in PasswordManager.GetAll()) {
+    <div>
+        @password.Id; @password.Name; @password.Text; @password.Username; @password.Url; @password.Site
+    </div>
+}
+
+<button class="btn btn-primary float" @onclick=StartAddNewPassword>
     <i class="bi bi-plus-lg"></i>
 </button>
+
+@code {
+    private void StartAddNewPassword() {
+        PasswordManager.Add("a", "b", "c", "d", "e");
+        PasswordManager.Add("f", "g", "h", "i", "j");
+        PasswordManager.Add("k", "l", "m", "n", "o");
+    }
+}
