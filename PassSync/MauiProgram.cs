@@ -1,4 +1,7 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Maui.Controls.Hosting;
+using Microsoft.Maui.Hosting;
 
 namespace PassSync {
     public static class MauiProgram {
@@ -11,6 +14,7 @@ namespace PassSync {
                 });
 
             builder.Services.AddMauiBlazorWebView();
+            builder.Services.AddBlazorBootstrap();
 
 #if DEBUG
     		builder.Services.AddBlazorWebViewDeveloperTools();
