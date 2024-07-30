@@ -6,7 +6,7 @@ namespace PassSync.Storage {
     /// <summary>
     /// Manages the storage and retrieval of passwords
     /// </summary>
-    internal class PasswordManager {
+    public static class PasswordManager {
         /// <summary>
         /// The list of current passwords
         /// </summary>
