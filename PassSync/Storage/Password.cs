@@ -9,8 +9,7 @@ namespace PassSync.Storage {
     /// <param name="Text"> The actual password </param>
     /// <param name="Username"> The username attached to the password </param>
     /// <param name="Url"> The url of the website this password is for </param>
-    /// <param name="Site"> The name of the website this password is for </param>
-    internal record Password(Guid Id, string Name, string Text, string Username, string Url, string Site) {
+    internal record Password(Guid Id, string Name, string Text, string Username, string Url) {
 
     }
 }

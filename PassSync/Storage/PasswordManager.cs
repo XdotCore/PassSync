@@ -37,9 +37,8 @@ namespace PassSync.Storage {
         /// <param name="text"> The actual password </param>
         /// <param name="username"> The username attached to the password </param>
         /// <param name="url"> The url of the website this password is for </param>
-        /// <param name="site"> The name of the website this password is for </param>
-        public static void Add(string name, string text, string username, string url, string site) {
-            Passwords.Add(new(Guid.NewGuid(), name, text, username, url, site));
+        public static void Add(string name, string text, string username, string url) {
+            Passwords.Add(new(Guid.NewGuid(), name, text, username, url));
             Save();
         }
 

@@ -1,9 +1,10 @@
 ﻿@page "/"
+@using PassSync.Components.Components
 @using PassSync.Storage
 
 @foreach(Password password in PasswordManager.GetAll()) {
     <div>
-        @password.Id; @password.Name; @password.Text; @password.Username; @password.Url; @password.Site
+        @password.Id; @password.Name; @password.Text; @password.Username; @password.Url
     </div>
 }
 
@@ -11,10 +12,16 @@
     <i class="bi bi-plus-lg"></i>
 </button>
 
+@if (PasswordMakerShowing) {
+    <PasswordMaker IsNew=PasswordMakerIsNew ExitPressed=@(() => PasswordMakerShowing = false) />
+}
+
 @code {
+    private bool PasswordMakerShowing { get; set; } = false;
+    private bool PasswordMakerIsNew { get; set; } = true;
+
     private void StartAddNewPassword() {
-        PasswordManager.Add("a", "b", "c", "d", "e");
-        PasswordManager.Add("f", "g", "h", "i", "j");
-        PasswordManager.Add("k", "l", "m", "n", "o");
+        PasswordMakerShowing = true;
+        PasswordMakerIsNew = true;
     }
 }
