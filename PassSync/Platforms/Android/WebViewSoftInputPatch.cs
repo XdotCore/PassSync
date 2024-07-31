@@ -12,7 +12,7 @@ using Activity = Android.App.Activity;
 using Rect = Android.Graphics.Rect;
 using View = Android.Views.View;
 
-namespace MauiBlazor3.Platform.Android;
+namespace PassSync;
 
 [SupportedOSPlatform("Android")]
 public static class WebViewSoftInputPatch {

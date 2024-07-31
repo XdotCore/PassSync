@@ -1,7 +1,6 @@
 ﻿using Android.App;
 using Android.Content.PM;
 using Android.OS;
-using MauiBlazor3.Platform.Android;
 using Microsoft.Maui;
 
 namespace PassSync {

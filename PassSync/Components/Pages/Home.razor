@@ -12,25 +12,18 @@
     <i class="bi bi-plus-lg"></i>
 </button>
 
-@if (PasswordMakerShowing) {
-    <PasswordMaker IsNew=PasswordMakerIsNew ExitPressed=ExitAddNewPassword SubmitPressed=SubmitAddNewPassword />
-}
+<Modal @ref=PasswordMaker IsVerticallyCentered=true Style="chil" />
 
 @code {
-    private bool PasswordMakerShowing { get; set; } = false;
-    private bool PasswordMakerIsNew { get; set; } = true;
+    private Modal PasswordMaker { get; set; }
 
-    private void StartAddNewPassword() {
-        PasswordMakerShowing = true;
-        PasswordMakerIsNew = true;
+    private async void StartAddNewPassword() {
+        Dictionary<string, object> parameters = new() { ["SubmitPressed"] = EventCallback.Factory.Create<Password>(this, SubmitAddNewPassword) };
+        await PasswordMaker.ShowAsync<PasswordMaker>(title: "New Password", parameters: parameters);
     }
 
-    private void ExitAddNewPassword() {
-        PasswordMakerShowing = false;
-    }
-
-    private void SubmitAddNewPassword(Password newPassword) {
-        PasswordMakerShowing = false;
+    private async void SubmitAddNewPassword(Password newPassword) {
         PasswordManager.Add(newPassword);
+        await PasswordMaker.HideAsync();
     }
 }
