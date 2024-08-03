@@ -2,17 +2,21 @@
 @using PassSync.Components.Components
 @using PassSync.Storage
 
-@foreach(Password password in PasswordManager.GetAll()) {
-    <div>
-        @password.Id; @password.Name; @password.Text; @password.Username; @password.Url
+<div class="container">
+    <div class="passwordContainer">
+        @foreach(Password password in PasswordManager.GetAll()) {
+            <PasswordDisplay Password=password />
+        }
     </div>
-}
 
-<button class="btn btn-primary float" @onclick=StartAddNewPassword>
-    <i class="bi bi-plus-lg"></i>
-</button>
+    <div>
+        <button class="btn btn-primary add-new" @onclick=StartAddNewPassword>
+            <i class="bi bi-plus-lg"></i>
+        </button>
+    </div>
+</div>
 
-<Modal @ref=PasswordMaker IsVerticallyCentered=true Style="chil" />
+<Modal @ref=PasswordMaker IsVerticallyCentered=true />
 
 @code {
     private Modal PasswordMaker { get; set; }
