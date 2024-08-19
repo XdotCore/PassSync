@@ -5,7 +5,9 @@
 <div class="container">
     <div class="passwordContainer">
         @foreach(Password password in PasswordManager.GetAll()) {
-            <PasswordDisplay Password=password StateChanged=StateHasChanged />
+            <div class="passDisp">
+                <PasswordDisplay Password=password StateChanged=StateHasChanged />
+            </div>
         }
     </div>
 
