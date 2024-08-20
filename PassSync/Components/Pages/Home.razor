@@ -2,8 +2,8 @@
 @using PassSync.Components.Components
 @using PassSync.Storage
 
-<div class="container">
-    <div class="passwordContainer">
+<div class="homeContainer">
+    <div>
         @foreach(Password password in Passwords) {
             <div class="passDisp">
                 <PasswordDisplay Password=password StateChanged=LoadPasswords />
