@@ -26,10 +26,13 @@ namespace PassSync.Storage {
         private const string UnderscoreChar = "_";
         private const string SpecialChars = """!"#$%&'()*+,-./:;<=>?@[\]^`{|}~""";
 
+        // parameterless ctor for xml serialization
+        private Password() : this("", null, null, false, false, false, false, false, false, null, 0) { }
+
         /// <summary>
         /// The unique identifier of the password
         /// </summary>
-        public Guid Id { get; } = Guid.NewGuid();
+        public Guid Id { get; init; } = Guid.NewGuid();
 
         /// <summary>
         /// The actual password

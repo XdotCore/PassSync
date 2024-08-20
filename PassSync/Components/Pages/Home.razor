@@ -4,9 +4,9 @@
 
 <div class="container">
     <div class="passwordContainer">
-        @foreach(Password password in PasswordManager.GetAll()) {
+        @foreach(Password password in Passwords) {
             <div class="passDisp">
-                <PasswordDisplay Password=password StateChanged=StateHasChanged />
+                <PasswordDisplay Password=password StateChanged=LoadPasswords />
             </div>
         }
     </div>
@@ -23,13 +23,23 @@
 @code {
     private Modal PasswordMaker { get; set; }
 
+    private IEnumerable<Password> Passwords { get; set; } = [];
+
+    protected override async Task OnInitializedAsync() {
+        await LoadPasswords();
+    }
+
+    private async Task LoadPasswords() {
+        Passwords = await PasswordManager.GetAll();
+    }
+
     private async void StartAddNewPassword() {
         Dictionary<string, object> parameters = new() { ["SubmitPressed"] = EventCallback.Factory.Create<Password>(this, SubmitAddNewPassword) };
         await PasswordMaker.ShowAsync<PasswordMaker>(title: "New Password", parameters: parameters);
     }
 
     private async void SubmitAddNewPassword(Password newPassword) {
-        PasswordManager.Add(newPassword);
+        await PasswordManager.Add(newPassword);
         await PasswordMaker.HideAsync();
     }
 }
