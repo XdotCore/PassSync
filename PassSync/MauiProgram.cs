@@ -15,6 +15,7 @@ namespace PassSync {
 
             builder.Services.AddMauiBlazorWebView();
             builder.Services.AddBlazorBootstrap();
+            builder.Services.AddDataProtection();
 
 #if DEBUG
     		builder.Services.AddBlazorWebViewDeveloperTools();

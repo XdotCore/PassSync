@@ -1,0 +1,63 @@
+﻿@page "/sync"
+@using Button = BlazorBootstrap.Button
+@using InTheHand.Bluetooth
+@using InTheHand.Net.Bluetooth
+@using InTheHand.Net.Sockets
+@using Microsoft.Maui.ApplicationModel
+@using Microsoft.Maui.Controls
+
+@if (!HasBluetoothPermission) {
+    <p>Please enable bluetooth and fine location for this app in settings.</p>
+}
+
+@if (!IsBluetoothOn) {
+    <p>Please enable bluetooth.</p>
+}
+
+@if (HasBluetoothPermission && IsBluetoothOn) {
+    <Button Color=ButtonColor.Primary @onclick=ConnectToDevice>Connect to Device</Button>
+}
+else {
+    <p>A bluetooth connection and fine location is needed to find devices and sync passwords across them.</p>
+}
+
+<Modal @ref=TransferDataModal IsVerticallyCentered=true>
+
+</Modal>
+
+@code {
+    private Modal TransferDataModal { get; set; }
+
+    private bool HasBluetoothPermission { get; set; } = false;
+    private bool IsBluetoothOn { get; set; } = false;
+
+    protected override async Task OnInitializedAsync() {
+        HasBluetoothPermission = await AskPermission();
+
+        if (!HasBluetoothPermission)
+            return;
+
+        IsBluetoothOn = await Bluetooth.GetAvailabilityAsync();
+    }
+
+    private async Task<bool> AskPermission() {
+        // this includes all permissions needed here: https://github.com/dotnet-bluetooth-le/dotnet-bluetooth-le?tab=readme-ov-file#android
+        PermissionStatus status = await Permissions.CheckStatusAsync<Permissions.Bluetooth>();
+
+        if (status == PermissionStatus.Granted)
+            return true;
+
+        if (Permissions.ShouldShowRationale<Permissions.Bluetooth>())
+            await Application.Current.MainPage.DisplayAlert("Bluetooth Permission", "Bluetooth is necessary to sync across devices.", "Okay");
+
+        status = await Permissions.RequestAsync<Permissions.Bluetooth>();
+        return status == PermissionStatus.Granted;
+    }
+
+    private async Task ConnectToDevice() {
+        BluetoothDevicePicker devicePicker = new();
+        BluetoothDeviceInfo device = await devicePicker.PickSingleDeviceAsync();
+
+        await Application.Current.MainPage.DisplayAlert(null, $"{device.DeviceName}, {device.DeviceAddress}", "Okay");
+    }
+}

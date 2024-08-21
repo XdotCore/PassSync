@@ -1,0 +1,12 @@
+﻿.deviceCard {
+    padding-bottom: 1em;
+}
+
+.deviceBody {
+    display: flex;
+    flex-direction: row;
+}
+
+.deviceBtn {
+    margin-left: auto;
+}
