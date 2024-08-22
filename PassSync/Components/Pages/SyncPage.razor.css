@@ -1,12 +1,8 @@
-﻿.deviceCard {
-    padding-bottom: 1em;
-}
-
-.deviceBody {
+﻿.noConnectionDiv {
     display: flex;
-    flex-direction: row;
-}
-
-.deviceBtn {
-    margin-left: auto;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    justify-content: center;
+    align-items: center;
 }
