@@ -1,10 +1,13 @@
 ﻿@page "/sync"
+@implements IDisposable
 @using Button = BlazorBootstrap.Button
 @using InTheHand.Bluetooth
 @using InTheHand.Net.Bluetooth
 @using InTheHand.Net.Sockets
 @using Microsoft.Maui.ApplicationModel
 @using Microsoft.Maui.Controls
+@using System.IO
+@using System.Net.Sockets
 
 @if (!HasBluetoothPermission) {
     <p>Please enable bluetooth and fine location for this app in settings.</p>
@@ -16,20 +19,26 @@
 
 @if (HasBluetoothPermission && IsBluetoothOn) {
     <Button Color=ButtonColor.Primary @onclick=ConnectToDevice>Connect to Device</Button>
+
+    if (ConnectedDevice is not null) {
+        <div>Connected to: @ConnectedDevice.DeviceName (@ConnectedDevice.DeviceAddress)</div>
+        <Button Color=ButtonColor.Primary @onclick=BeHost>Be Host</Button>
+        <Button Color=ButtonColor.Primary @onclick=BeClient>Be Client</Button>
+        <div>@ConnectionState</div>
+        <div>@Message</div>
+    }
 }
 else {
     <p>A bluetooth connection and fine location is needed to find devices and sync passwords across them.</p>
 }
 
-<Modal @ref=TransferDataModal IsVerticallyCentered=true>
-
-</Modal>
-
 @code {
-    private Modal TransferDataModal { get; set; }
-
     private bool HasBluetoothPermission { get; set; } = false;
     private bool IsBluetoothOn { get; set; } = false;
+
+    private BluetoothDeviceInfo ConnectedDevice { get; set; } = null;
+    private string ConnectionState { get; set; }
+    private string Message { get; set; }
 
     protected override async Task OnInitializedAsync() {
         HasBluetoothPermission = await AskPermission();
@@ -38,6 +47,11 @@ else {
             return;
 
         IsBluetoothOn = await Bluetooth.GetAvailabilityAsync();
+        Bluetooth.AvailabilityChanged += OnBluetoothChanged;
+    }
+
+    public void Dispose() {
+        Bluetooth.AvailabilityChanged -= OnBluetoothChanged;
     }
 
     private async Task<bool> AskPermission() {
@@ -54,10 +68,92 @@ else {
         return status == PermissionStatus.Granted;
     }
 
+    private async void OnBluetoothChanged(object s, EventArgs e) {
+        IsBluetoothOn = await Bluetooth.GetAvailabilityAsync();
+
+        await InvokeAsync(StateHasChanged);
+    }
+
     private async Task ConnectToDevice() {
         BluetoothDevicePicker devicePicker = new();
-        BluetoothDeviceInfo device = await devicePicker.PickSingleDeviceAsync();
+        ConnectedDevice = await devicePicker.PickSingleDeviceAsync();
+    }
 
-        await Application.Current.MainPage.DisplayAlert(null, $"{device.DeviceName}, {device.DeviceAddress}", "Okay");
+    private async Task BeHost() {
+        try {
+            using BluetoothListener listener = new(BluetoothService.SerialPort);
+            listener.Start();
+
+            BluetoothClient client = null;
+            // awesome, pending doesn't work on android whoo!, source: https://github.com/inthehand/32feet/issues/337#issuecomment-1706223549
+            if (!OperatingSystem.IsAndroid()) {
+                while (!listener.Pending())
+                    await Task.Delay(25);
+                client = listener.AcceptBluetoothClient();
+            }
+            else {
+                bool isAccepted = false;
+                _ = Task.Run(() =>
+                {
+                    client = listener.AcceptBluetoothClient();
+                    isAccepted = true;
+                });
+                while (!isAccepted)
+                    await Task.Delay(25);
+            }
+
+            using Stream stream = client.GetStream();
+            /*StreamWriter writer = new(stream);
+            await writer.WriteLineAsync("Host: Hello World!");
+            await writer.FlushAsync();
+
+            StreamReader reader = new(stream);
+            Message = await reader.ReadLineAsync();*/
+
+            BinaryWriter writer = new(stream);
+            writer.Write("Host: Hello World!");
+            writer.Flush();
+
+            BinaryReader reader = new(stream);
+            Message = reader.ReadString();
+            await InvokeAsync(StateHasChanged);
+
+            writer.Close();
+            reader.Close();
+        } catch (Exception e) {
+            await Application.Current.MainPage.DisplayAlert(null, e.ToString(), "Okay");
+        }
+    }
+
+    private async Task BeClient() {
+        try {
+            using BluetoothClient client = new();
+            await client.ConnectAsync(ConnectedDevice.DeviceAddress, BluetoothService.SerialPort);
+
+            if (!client.Connected)
+                await Application.Current.MainPage.DisplayAlert(null, "Could not connect to device", "Okay");
+
+            using Stream stream = client.GetStream();
+            /*StreamReader reader = new(stream);
+            Message = await reader.ReadLineAsync();
+            await InvokeAsync(StateHasChanged);
+
+            StreamWriter writer = new(stream);
+            await writer.WriteLineAsync("Client: Hello World!");
+            await writer.FlushAsync();*/
+
+            BinaryReader reader = new(stream);
+            Message = reader.ReadString();
+            await InvokeAsync(StateHasChanged);
+
+            BinaryWriter writer = new(stream);
+            writer.Write("Client: Hello World!");
+            writer.Flush();
+
+            writer.Close();
+            reader.Close();
+        } catch (Exception e) {
+            await Application.Current.MainPage.DisplayAlert(null, e.ToString(), "Okay");
+        }
     }
 }
