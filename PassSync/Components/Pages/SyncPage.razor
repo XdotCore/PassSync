@@ -8,6 +8,8 @@
 @using Microsoft.Maui.Controls
 @using System.IO
 @using System.Net.Sockets
+@using PassSync.Components.Components
+@using PassSync.Storage
 
 @if (!HasBluetoothPermission) {
     <p>Please enable bluetooth and fine location for this app in settings.</p>
@@ -25,16 +27,97 @@
         </div>
     }
     else {
-        <div>Connected to: @ConnectedDevice.DeviceName (@ConnectedDevice.DeviceAddress)</div>
-        <Button Color=ButtonColor.Primary @onclick=BeHost>Be Host</Button>
-        <Button Color=ButtonColor.Primary @onclick=BeClient>Be Client</Button>
-        <div>@ConnectionState</div>
-        <div>@Message</div>
+        <div class="connectionDiv">
+            <div class="deviceCard">
+                <Card>
+                    <CardHeader>
+                        Device Connected
+                    </CardHeader>
+                    <CardBody>
+                        <div>Name: @ConnectedDevice.DeviceName</div>
+                        <div>Address: @ConnectedDevice.DeviceAddress</div>
+                        <div>Type: @ConnectedDevice.ClassOfDevice.MajorDevice</div>
+                        <div class="syncBtn"><Button Color=ButtonColor.Primary @onclick=StartSync>Sync</Button></div>
+                    </CardBody>
+                </Card>
+            </div>
+        </div>
     }
 }
 else {
     <p>A bluetooth connection and fine location is needed to find devices and sync passwords across them.</p>
 }
+
+<Modal @ref=StatusModal IsVerticallyCentered=true UseStaticBackdrop=ShouldNotInterrupt() ShowCloseButton=false>
+    <BodyTemplate>
+        @switch (Status) {
+            case TransferStatus.AttemptingClient:
+                <text>Attempting as client</text>
+                <Spinner />
+                break;
+            case TransferStatus.Listening:
+                <text>Waiting for other device</text>
+                <Spinner />
+                break;
+            case TransferStatus.UserPrompt:
+                <text>Choose which device to take from</text>
+                break;
+            case TransferStatus.IsClient:
+                <text>Waiting for input on other device</text>
+                <Spinner />
+                break;
+            case TransferStatus.Transferring:
+                <text>Making sync transfer</text>
+                <Spinner />
+                break;
+            case TransferStatus.Conflict:
+                <text>Which version will you keep?</text>
+                <div>
+                    This:
+                    <PasswordDisplay Password=ConflictHost IsConflict=true />
+                </div>
+                <div>
+                    Other:
+                    <PasswordDisplay Password=ConflictClient IsConflict=true />
+                </div>
+                break;
+            case TransferStatus.Confirm:
+                <text>Changes will make affect now</text>
+                break;
+            default:
+                <text>Unknown State</text>
+                break;
+        }
+    </BodyTemplate>
+    <FooterTemplate>
+        @switch (Status) {
+            case TransferStatus.AttemptingClient:
+                break;
+            case TransferStatus.Listening:
+                <Button Color=ButtonColor.Primary>Cancel</Button>
+                break;
+            case TransferStatus.UserPrompt:
+                <Button Color=ButtonColor.Primary>This</Button>
+                <Button Color=ButtonColor.Primary>Other</Button>
+                break;
+            case TransferStatus.IsClient:
+                break;
+            case TransferStatus.Transferring:
+                break;
+            case TransferStatus.Conflict:
+                <Button Color=ButtonColor.Primary>This</Button>
+                <Button Color=ButtonColor.Primary>Other</Button>
+                break;
+            case TransferStatus.Confirm:
+                <Button Color=ButtonColor.Secondary>Cancel</Button>
+                <Button Color=ButtonColor.Primary>Confirm</Button>
+                break;
+            default:
+                <Button Color=ButtonColor.Primary @onclick=StatusModal.HideAsync>Close</Button>
+                break;
+        }
+    </FooterTemplate>
+</Modal>
 
 @code {
     private static readonly Guid AppGuid = new("{601CAE8F-89B7-47C1-A97E-981E6C3F69FF}");
@@ -43,8 +126,12 @@ else {
     private bool IsBluetoothOn { get; set; } = false;
 
     private BluetoothDeviceInfo ConnectedDevice { get; set; } = null;
-    private string ConnectionState { get; set; }
     private string Message { get; set; }
+
+    private Modal StatusModal { get; set; }
+    private TransferStatus Status { get; set; }
+    private Password ConflictHost { get; set; }
+    private Password ConflictClient { get; set; }
 
     protected override async Task OnInitializedAsync() {
         HasBluetoothPermission = await AskPermission();
@@ -85,7 +172,19 @@ else {
         ConnectedDevice = await devicePicker.PickSingleDeviceAsync();
     }
 
+    private async Task StartSync() {
+        Status = TransferStatus.AttemptingClient;
+        await StatusModal.ShowAsync();
+
+        if (await BeClient())
+            return;
+
+        await BeHost();
+    }
+
     private async Task BeHost() {
+        Status = TransferStatus.Listening;
+        await InvokeAsync(StateHasChanged);
         try {
             using BluetoothListener listener = new(AppGuid);
             listener.Start();
@@ -108,6 +207,8 @@ else {
                     await Task.Delay(25);
             }
 
+            Status = TransferStatus.UserPrompt;
+
             using Stream stream = client.GetStream();
 
             BinaryWriter writer = new(stream);
@@ -125,13 +226,16 @@ else {
         }
     }
 
-    private async Task BeClient() {
+    private async Task<bool> BeClient() {
         try {
             using BluetoothClient client = new();
             await client.ConnectAsync(ConnectedDevice.DeviceAddress, AppGuid);
 
             if (!client.Connected)
-                await Application.Current.MainPage.DisplayAlert(null, "Could not connect to device", "Okay");
+                return false;
+
+            Status = TransferStatus.IsClient;
+            await InvokeAsync(StateHasChanged);
 
             using Stream stream = client.GetStream();
 
@@ -145,8 +249,28 @@ else {
 
             writer.Close();
             reader.Close();
+
+            return true;
+        } catch (ArgumentOutOfRangeException) {
+            // Bluetooth service was not found
         } catch (Exception e) {
             await Application.Current.MainPage.DisplayAlert(null, e.ToString(), "Okay");
         }
+
+        return false;
+    }
+
+    private bool ShouldNotInterrupt() {
+        return (Status & (TransferStatus.AttemptingClient | TransferStatus.IsClient | TransferStatus.Transferring | TransferStatus.Conflict)) != 0;
+    }
+
+    private enum TransferStatus {
+        AttemptingClient,
+        Listening,
+        UserPrompt,
+        IsClient,
+        Transferring,
+        Conflict,
+        Confirm
     }
 }
