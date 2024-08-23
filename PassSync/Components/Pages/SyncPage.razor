@@ -64,25 +64,6 @@ else {
                 <text>Waiting for other device</text>
                 <Spinner />
                 break;
-            case TransferStatus.UserPrompt:
-                <text>Choose which device to take from</text>
-                <div>
-                    <InputRadioGroup @bind-Value=MergeDevice>
-                        <div>
-                            <InputRadio Value=DeviceChoice.This id="thisDevice" />
-                            <label for="thisDevice">Replace all passwords on other with all passwords on this</label>
-                        </div>
-                        <div>
-                            <InputRadio Value=DeviceChoice.Other id="otherDevice" />
-                            <label for="otherDevice">Replace all passwords on this with all passwords on other</label>
-                        </div>
-                        <div>
-                            <InputRadio Value=DeviceChoice.Combined id="combineDevice" />
-                            <label for="combineDevice">Combine from both devices (may require resolving conflicts)</label>
-                        </div>
-                    </InputRadioGroup>
-                </div>
-                break;
             case TransferStatus.IsClient:
                 <text>Waiting for input on other device</text>
                 <Spinner />
@@ -93,14 +74,13 @@ else {
                 break;
             case TransferStatus.Conflict:
                 <text>Which version will you keep?</text>
-                <div>
-                    This:
-                    <PasswordDisplay Password=ConflictThis IsConflict=true />
-                </div>
-                <div>
-                    Other:
-                    <PasswordDisplay Password=ConflictOther IsConflict=true />
-                </div>
+                <InputRadioGroup @bind-Value=ConflictChosen>
+                    @for (int i = 0; i < Conflicts.Count; i++) {
+                        <InputRadio Value=i id=@($"conflict{i}")/>
+                        <label for=@($"conflict{i}")>i</label>
+                        <PasswordDisplay IsConflict=true Password=Conflicts[i] />
+                    }
+                </InputRadioGroup>
                 break;
             case TransferStatus.Confirm:
                 <text>Changes will make affect now (this cannot be undone)</text>
@@ -117,17 +97,12 @@ else {
             case TransferStatus.Listening:
                 <Button Color=ButtonColor.Secondary @onclick=StatusModal.HideAsync>Cancel</Button>
                 break;
-            case TransferStatus.UserPrompt:
-                <Button Color=ButtonColor.Secondary @onclick=StatusModal.HideAsync>Cancel</Button>
-                <Button Color=ButtonColor.Primary @onclick=@(() => IsConfirmed = true)>Confirm</Button>
-                break;
             case TransferStatus.IsClient:
                 break;
             case TransferStatus.Transferring:
                 break;
             case TransferStatus.Conflict:
-                <Button Color=ButtonColor.Primary @onclick=@(() => IsChoseThis = true)>This</Button>
-                <Button Color=ButtonColor.Primary @onclick=@(() => IsChoseOther = true)>Other</Button>
+                <Button Color=ButtonColor.Primary @onclick=@(() => IsConfirmed = true)>Confirm</Button>
                 break;
             case TransferStatus.Confirm:
                 <Button Color=ButtonColor.Secondary @onclick=StatusModal.HideAsync>Cancel</Button>
@@ -147,17 +122,13 @@ else {
     private bool IsBluetoothOn { get; set; } = false;
 
     private BluetoothDeviceInfo ConnectedDevice { get; set; } = null;
-    private string Message { get; set; }
 
     private Modal StatusModal { get; set; }
     private TransferStatus Status { get; set; }
     private bool IsCancelled { get; set; }
     private bool IsConfirmed { get; set; }
-    private DeviceChoice MergeDevice { get; set; }
-    private Password ConflictThis { get; set; }
-    private bool IsChoseThis { get; set; }
-    private Password ConflictOther { get; set; }
-    private bool IsChoseOther { get; set; }
+    private List<Password> Conflicts { get; set; } = [];
+    private int ConflictChosen { get; set; }
 
     protected override async Task OnInitializedAsync() {
         HasBluetoothPermission = await AskPermission();
@@ -248,70 +219,52 @@ else {
                 return;
             }
 
-            await SetStatus(TransferStatus.UserPrompt);
+            await SetStatus(TransferStatus.Transferring);
+
+            using Stream stream = client.GetStream();
+
+            IEnumerable<Password> thisPasswords = await PasswordManager.GetAll();
+            IEnumerable<Password> otherPasswords = await RecievePasswords(stream);
+            List<Password> newList = new(thisPasswords.Concat(otherPasswords));
+
+            // resolve conflicts
+            for (int i = 0; i < newList.Count; i++) {
+                Conflicts.Clear();
+                Conflicts.Add(newList[i]);
+
+                for (int j = i + 1; j < newList.Count; j++) {
+                    // Register conflict
+                    if (newList[i].IsConflict(newList[j])) {
+                        Conflicts.Add(newList[j]);
+                    }
+                    // Remove conflicts and duplicates
+                    if (newList[i].Id == newList[j].Id)
+                        newList.RemoveAt(j);
+                }
+
+                if (Conflicts.Count > 1) {
+                    await SetStatus(TransferStatus.Conflict);
+
+                    IsConfirmed = false;
+                    while (!IsConfirmed)
+                        await Task.Delay(25);
+
+                    newList[i] = Conflicts[ConflictChosen];
+                }
+            }
+
+            await SetStatus(TransferStatus.Transferring);
+
+            await SendPasswords(stream, newList);
+
+            await SetStatus(TransferStatus.Confirm);
 
             IsCancelled = IsConfirmed = false;
             while (!IsCancelled && !IsConfirmed)
                 await Task.Delay(25);
 
-            if (IsCancelled)
-                return;
-
-            await SetStatus(TransferStatus.Transferring);
-
-            using Stream stream = client.GetStream();
-
-            await stream.WriteAsync(new byte[1] { (byte)MergeDevice });
-            await stream.FlushAsync();
-
-            switch (MergeDevice) {
-                case DeviceChoice.This: {
-                    await SendPasswords(stream, await PasswordManager.GetAll());
-                } break;
-                case DeviceChoice.Other: {
-                    IEnumerable<Password> passwords = await RecievePasswords(stream);
-
-                    await SetStatus(TransferStatus.Confirm);
-
-                    IsCancelled = IsConfirmed = false;
-                    while (!IsCancelled && !IsConfirmed)
-                        await Task.Delay(25);
-
-                    if (IsConfirmed)
-                        await PasswordManager.ReplaceAll(passwords);
-                } break;
-                case DeviceChoice.Combined: {
-                    IEnumerable<Password> thisPasswords = await PasswordManager.GetAll();
-                    IEnumerable<Password> otherPasswords = await RecievePasswords(stream);
-
-                    IEnumerable<(Password pThis, Password pOther)> conflicts = thisPasswords.SelectMany(tp => otherPasswords.Where(op => tp.IsConflict(op)).Select(op => (tp, op)));
-                    IEnumerable<Password> newList = thisPasswords.Concat(otherPasswords).Where(p => !conflicts.Any(ps => p.Id == ps.pThis.Id));
-
-                    foreach (var conflict in conflicts) {
-                        ConflictThis = conflict.pThis;
-                        ConflictOther = conflict.pOther;
-
-                        IsChoseThis = IsChoseOther = false;
-                        while (!IsChoseThis || IsChoseOther)
-                            await Task.Delay(25);
-
-                        newList = newList.Append(IsChoseThis ? conflict.pThis : conflict.pOther);
-                    }
-
-                    await SetStatus(TransferStatus.Transferring);
-
-                    await SendPasswords(stream, newList);
-
-                    await SetStatus(TransferStatus.Confirm);
-
-                    IsCancelled = IsConfirmed = false;
-                    while (!IsCancelled && !IsConfirmed)
-                        await Task.Delay(25);
-
-                    if (IsConfirmed)
-                        await PasswordManager.ReplaceAll(newList);
-                } break;
-            }
+            if (IsConfirmed)
+                await PasswordManager.ReplaceAll(newList);
         } catch (Exception e) {
             await Application.Current.MainPage.DisplayAlert(null, e.ToString(), "Okay");
         }
@@ -330,43 +283,19 @@ else {
 
             using Stream stream = client.GetStream();
 
-            byte[] mergeDevice = new byte[1];
-            await stream.ReadExactlyAsync(mergeDevice, 0, 1);
-            MergeDevice = (DeviceChoice)mergeDevice[0];
-
             await SetStatus(TransferStatus.Transferring);
 
-            // This and other are reversed relative to the client
-            switch (MergeDevice) {
-                case DeviceChoice.This: {
-                    IEnumerable<Password> passwords = await RecievePasswords(stream);
+            await SendPasswords(stream, await PasswordManager.GetAll());
+            IEnumerable<Password> passwords = await RecievePasswords(stream);
 
-                    await SetStatus(TransferStatus.Confirm);
+            await SetStatus(TransferStatus.Confirm);
 
-                    IsCancelled = IsConfirmed = false;
-                    while (!IsCancelled && !IsConfirmed)
-                        await Task.Delay(25);
+            IsCancelled = IsConfirmed = false;
+            while (!IsCancelled && !IsConfirmed)
+                await Task.Delay(25);
 
-                    if (IsConfirmed)
-                        await PasswordManager.ReplaceAll(passwords);
-                } break;
-                case DeviceChoice.Other: {
-                    await SendPasswords(stream, await PasswordManager.GetAll());
-                } break;
-                case DeviceChoice.Combined: {
-                    await SendPasswords(stream, await PasswordManager.GetAll());
-                    IEnumerable<Password> passwords = await RecievePasswords(stream);
-
-                    await SetStatus(TransferStatus.Confirm);
-
-                    IsCancelled = IsConfirmed = false;
-                    while (!IsCancelled && !IsConfirmed)
-                        await Task.Delay(25);
-
-                    if (IsConfirmed)
-                        await PasswordManager.ReplaceAll(passwords);
-                } break;
-            }
+            if (IsConfirmed)
+                await PasswordManager.ReplaceAll(passwords);
         } catch (ArgumentOutOfRangeException) {
             // Bluetooth service was not found
             return false;
@@ -425,11 +354,5 @@ else {
         Transferring,
         Conflict,
         Confirm
-    }
-
-    private enum DeviceChoice : byte {
-        Combined,
-        This,
-        Other
     }
 }
