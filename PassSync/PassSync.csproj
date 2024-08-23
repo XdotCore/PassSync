@@ -22,10 +22,10 @@
         <Nullable>disable</Nullable>
 
         <!-- Display name -->
-        <ApplicationTitle>PassSync</ApplicationTitle>
+        <ApplicationTitle>Pass Sync</ApplicationTitle>
 
         <!-- App Identifier -->
-        <ApplicationId>com.companyname.passsync</ApplicationId>
+        <ApplicationId>com.xdotcore.passsync</ApplicationId>
 
         <!-- Versions -->
         <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
