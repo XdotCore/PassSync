@@ -209,10 +209,8 @@ else {
         // once it is disposed on return, PreventNavigation will be unregistered
         using IDisposable handler = NavigationManager.RegisterLocationChangingHandler(PreventNavigation);
 
-        if (await BeClient())
-            return;
-
-        await BeHost();
+        if (!await BeClient())
+            await BeHost();
 
         await StatusModal.HideAsync();
     }
@@ -257,23 +255,29 @@ else {
             if (IsCancelled)
                 return;
 
+            await SetStatus(TransferStatus.Transferring);
+
             using Stream stream = client.GetStream();
 
-            BinaryWriter writer = new(stream);
-            writer.Write("Host: Hello World!");
-            writer.Flush();
+            await stream.WriteAsync(new byte[1] { (byte)MergeDevice });
 
-            BinaryReader reader = new(stream);
-            Message = reader.ReadString();
-            await InvokeAsync(StateHasChanged);
+            switch (MergeDevice) {
+                case DeviceChoice.This: {
 
-            writer.Close();
-            reader.Close();
+                } break;
+                case DeviceChoice.Other: {
+
+                } break;
+                case DeviceChoice.Combined: {
+
+                } break;
+            }
         } catch (Exception e) {
             await Application.Current.MainPage.DisplayAlert(null, e.ToString(), "Okay");
         }
     }
 
+    // returns false if it successfully determined that this device should be host
     private async Task<bool> BeClient() {
         try {
             using BluetoothClient client = new();
@@ -286,25 +290,32 @@ else {
 
             using Stream stream = client.GetStream();
 
-            BinaryReader reader = new(stream);
-            Message = reader.ReadString();
-            await InvokeAsync(StateHasChanged);
+            byte[] mergeDevice = new byte[1];
+            await stream.ReadExactlyAsync(mergeDevice, 0, 1);
+            MergeDevice = (DeviceChoice)mergeDevice[0];
 
-            BinaryWriter writer = new(stream);
-            writer.Write("Client: Hello World!");
-            writer.Flush();
+            await SetStatus(TransferStatus.Transferring);
 
-            writer.Close();
-            reader.Close();
+            // This and other are reversed relative to the client
+            switch (MergeDevice) {
+                case DeviceChoice.This: {
 
-            return true;
+                } break;
+                case DeviceChoice.Other: {
+
+                } break;
+                case DeviceChoice.Combined: {
+                    
+                } break;
+            }
         } catch (ArgumentOutOfRangeException) {
             // Bluetooth service was not found
+            return false;
         } catch (Exception e) {
             await Application.Current.MainPage.DisplayAlert(null, e.ToString(), "Okay");
         }
 
-        return false;
+        return true;
     }
 
     private async Task SetStatus(TransferStatus newStatus) {
@@ -322,7 +333,7 @@ else {
         Confirm
     }
 
-    private enum DeviceChoice {
+    private enum DeviceChoice : byte {
         Combined,
         This,
         Other
