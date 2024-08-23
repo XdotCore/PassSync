@@ -36,8 +36,11 @@
                     <CardBody>
                         <div>Name: @ConnectedDevice.DeviceName</div>
                         <div>Address: @ConnectedDevice.DeviceAddress</div>
-                        <div>Type: @ConnectedDevice.ClassOfDevice.MajorDevice</div>
-                        <div class="syncBtn"><Button Color=ButtonColor.Primary @onclick=StartSync>Sync</Button></div>
+                        <div>Type: @ConnectedDevice.ClassOfDevice.Device</div>
+                        <div class="syncBtn">
+                            <Button Color=ButtonColor.Secondary @onclick=ConnectToDevice>Another</Button>
+                            <Button Color=ButtonColor.Primary @onclick=StartSync>Sync</Button>
+                        </div>
                     </CardBody>
                 </Card>
             </div>
@@ -183,11 +186,12 @@ else {
     }
 
     private async Task BeHost() {
-        Status = TransferStatus.Listening;
-        await InvokeAsync(StateHasChanged);
+        await SetStatus(TransferStatus.Listening);
         try {
             using BluetoothListener listener = new(AppGuid);
             listener.Start();
+
+            //StatusModal.OnHidePrevented
 
             BluetoothClient client = null;
             // awesome, pending doesn't work on android whoo!, source: https://github.com/inthehand/32feet/issues/337#issuecomment-1706223549
@@ -198,8 +202,7 @@ else {
             }
             else {
                 bool isAccepted = false;
-                _ = Task.Run(() =>
-                {
+                _ = Task.Run(() => {
                     client = listener.AcceptBluetoothClient();
                     isAccepted = true;
                 });
@@ -207,7 +210,7 @@ else {
                     await Task.Delay(25);
             }
 
-            Status = TransferStatus.UserPrompt;
+            await SetStatus(TransferStatus.UserPrompt);
 
             using Stream stream = client.GetStream();
 
@@ -234,8 +237,7 @@ else {
             if (!client.Connected)
                 return false;
 
-            Status = TransferStatus.IsClient;
-            await InvokeAsync(StateHasChanged);
+            await SetStatus(TransferStatus.IsClient);
 
             using Stream stream = client.GetStream();
 
@@ -262,6 +264,11 @@ else {
 
     private bool ShouldNotInterrupt() {
         return (Status & (TransferStatus.AttemptingClient | TransferStatus.IsClient | TransferStatus.Transferring | TransferStatus.Conflict)) != 0;
+    }
+
+    private async Task SetStatus(TransferStatus newStatus) {
+        Status = newStatus;
+        await InvokeAsync(StateHasChanged);
     }
 
     private enum TransferStatus {
