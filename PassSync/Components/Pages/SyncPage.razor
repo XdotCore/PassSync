@@ -227,7 +227,7 @@ else {
             IEnumerable<Password> otherPasswords = await RecievePasswords(stream);
             List<Password> newList = new(thisPasswords.Concat(otherPasswords));
 
-            // resolve conflicts
+            // resolve conflicts and duplicates
             for (int i = 0; i < newList.Count; i++) {
                 Conflicts.Clear();
                 Conflicts.Add(newList[i]);
