@@ -25,4 +25,4 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
     - name: Build
-      run: dotnet build PassSync/PassSync.csproj Release -f net8.0-android --no-restore
+      run: dotnet build PassSync/PassSync.csproj Release -c -f net8.0-android --no-restore
