@@ -1,5 +1,6 @@
 ﻿@page "/sync"
 @implements IDisposable
+@inject NavigationManager NavigationManager
 @using Button = BlazorBootstrap.Button
 @using InTheHand.Bluetooth
 @using InTheHand.Net.Bluetooth
@@ -51,7 +52,7 @@ else {
     <p>A bluetooth connection and fine location is needed to find devices and sync passwords across them.</p>
 }
 
-<Modal @ref=StatusModal IsVerticallyCentered=true UseStaticBackdrop=ShouldNotInterrupt() ShowCloseButton=false>
+<Modal @ref=StatusModal IsVerticallyCentered=true UseStaticBackdrop=true CloseOnEscape=false ShowCloseButton=false OnHiding=@(() => IsCancelled = true)>
     <BodyTemplate>
         @switch (Status) {
             case TransferStatus.AttemptingClient:
@@ -64,6 +65,22 @@ else {
                 break;
             case TransferStatus.UserPrompt:
                 <text>Choose which device to take from</text>
+                <div>
+                    <InputRadioGroup @bind-Value=MergeDevice>
+                        <div>
+                            <InputRadio Value=DeviceChoice.This id="thisDevice" />
+                            <label for="thisDevice">Take all from this device</label>
+                        </div>
+                        <div>
+                            <InputRadio Value=DeviceChoice.Other id="otherDevice" />
+                            <label for="otherDevice">Take all from the other device</label>
+                        </div>
+                        <div>
+                            <InputRadio Value=DeviceChoice.Combined id="combineDevice" />
+                            <label for="combineDevice">Combine from both devices (may require resolving conflicts)</label>
+                        </div>
+                    </InputRadioGroup>
+                </div>
                 break;
             case TransferStatus.IsClient:
                 <text>Waiting for input on other device</text>
@@ -97,26 +114,27 @@ else {
             case TransferStatus.AttemptingClient:
                 break;
             case TransferStatus.Listening:
-                <Button Color=ButtonColor.Primary>Cancel</Button>
+                <Button Color=ButtonColor.Secondary @onclick=StatusModal.HideAsync>Cancel</Button>
                 break;
             case TransferStatus.UserPrompt:
-                <Button Color=ButtonColor.Primary>This</Button>
-                <Button Color=ButtonColor.Primary>Other</Button>
+                <Button Color=ButtonColor.Secondary @onclick=StatusModal.HideAsync>Cancel</Button>
+                <Button Color=ButtonColor.Primary @onclick=@(() => IsConfirmed = true)>Confirm</Button>
                 break;
             case TransferStatus.IsClient:
                 break;
             case TransferStatus.Transferring:
                 break;
             case TransferStatus.Conflict:
+                <Button Color=ButtonColor.Secondary @onclick=StatusModal.HideAsync>Cancel</Button>
                 <Button Color=ButtonColor.Primary>This</Button>
                 <Button Color=ButtonColor.Primary>Other</Button>
                 break;
             case TransferStatus.Confirm:
-                <Button Color=ButtonColor.Secondary>Cancel</Button>
+                <Button Color=ButtonColor.Secondary @onclick=StatusModal.HideAsync>Cancel</Button>
                 <Button Color=ButtonColor.Primary>Confirm</Button>
                 break;
             default:
-                <Button Color=ButtonColor.Primary @onclick=StatusModal.HideAsync>Close</Button>
+                <Button Color=ButtonColor.Secondary @onclick=StatusModal.HideAsync>Close</Button>
                 break;
         }
     </FooterTemplate>
@@ -133,6 +151,9 @@ else {
 
     private Modal StatusModal { get; set; }
     private TransferStatus Status { get; set; }
+    private bool IsCancelled { get; set; }
+    private bool IsConfirmed { get; set; }
+    private DeviceChoice MergeDevice { get; set; }
     private Password ConflictHost { get; set; }
     private Password ConflictClient { get; set; }
 
@@ -179,10 +200,21 @@ else {
         Status = TransferStatus.AttemptingClient;
         await StatusModal.ShowAsync();
 
+        // I do not want the user to be able to leave in the middle of communication
+        // I have done everything I have thought of to prevent this
+        ValueTask PreventNavigation(LocationChangingContext ctx) {
+            ctx.PreventNavigation();
+            return ValueTask.CompletedTask;
+        }
+        // once it is disposed on return, PreventNavigation will be unregistered
+        using IDisposable handler = NavigationManager.RegisterLocationChangingHandler(PreventNavigation);
+
         if (await BeClient())
             return;
 
         await BeHost();
+
+        await StatusModal.HideAsync();
     }
 
     private async Task BeHost() {
@@ -191,14 +223,14 @@ else {
             using BluetoothListener listener = new(AppGuid);
             listener.Start();
 
-            //StatusModal.OnHidePrevented
-
+            IsCancelled = false;
             BluetoothClient client = null;
-            // awesome, pending doesn't work on android whoo!, source: https://github.com/inthehand/32feet/issues/337#issuecomment-1706223549
+            // awesome, pending doesn't work on android, whoo!, source: https://github.com/inthehand/32feet/issues/337#issuecomment-1706223549
             if (!OperatingSystem.IsAndroid()) {
-                while (!listener.Pending())
+                while (!listener.Pending() && !IsCancelled)
                     await Task.Delay(25);
-                client = listener.AcceptBluetoothClient();
+                if (!IsCancelled)
+                    client = listener.AcceptBluetoothClient();
             }
             else {
                 bool isAccepted = false;
@@ -206,11 +238,24 @@ else {
                     client = listener.AcceptBluetoothClient();
                     isAccepted = true;
                 });
-                while (!isAccepted)
+                while (!isAccepted && !IsCancelled)
                     await Task.Delay(25);
             }
 
+            if (IsCancelled) {
+                // just in case since AcceptBluetoothClient is still running on android
+                listener.Dispose();
+                return;
+            }
+
             await SetStatus(TransferStatus.UserPrompt);
+
+            IsCancelled = IsConfirmed = false;
+            while (!IsCancelled && !IsConfirmed)
+                await Task.Delay(25);
+
+            if (IsCancelled)
+                return;
 
             using Stream stream = client.GetStream();
 
@@ -262,10 +307,6 @@ else {
         return false;
     }
 
-    private bool ShouldNotInterrupt() {
-        return (Status & (TransferStatus.AttemptingClient | TransferStatus.IsClient | TransferStatus.Transferring | TransferStatus.Conflict)) != 0;
-    }
-
     private async Task SetStatus(TransferStatus newStatus) {
         Status = newStatus;
         await InvokeAsync(StateHasChanged);
@@ -279,5 +320,11 @@ else {
         Transferring,
         Conflict,
         Confirm
+    }
+
+    private enum DeviceChoice {
+        Combined,
+        This,
+        Other
     }
 }
