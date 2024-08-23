@@ -2,10 +2,8 @@
 using Microsoft.Maui.Storage;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Xml.Serialization;
 
 namespace PassSync.Storage {
     /// <summary>
@@ -31,7 +29,6 @@ namespace PassSync.Storage {
         /// <summary>
         /// Loads the passwords from file
         /// </summary>
-        /// <returns></returns>
         private async static Task Load() {
             string passwordIdsStr = await SecureStorage.GetAsync(PasswordIdsString);
             if (string.IsNullOrWhiteSpace(passwordIdsStr))
@@ -39,18 +36,15 @@ namespace PassSync.Storage {
 
             string[] idStrs = passwordIdsStr.Split(',');
 
-            XmlSerializer xmlizer = new(typeof(Password));
             foreach (string idStr in idStrs) {
                 string xml = await SecureStorage.GetAsync(idStr);
                 if (xml == null)
                     continue;
 
                 try {
-                    using StringReader reader = new(xml);
-
-                    Password password = (Password)xmlizer.Deserialize(reader);
+                    Password password = Password.FromXml(xml);
                     Passwords[password.Id] = password;
-                } catch(Exception e) {
+                } catch (Exception e) {
                     await Application.Current.MainPage.DisplayAlert("Error loading password.\nClose and make a GitHub issue.", $"{e}\n\n{xml}", "Okay");
                     continue;
                 }
@@ -67,13 +61,8 @@ namespace PassSync.Storage {
                 passwordIdsStr = " ";
             await SecureStorage.SetAsync(PasswordIdsString, passwordIdsStr);
 
-            XmlSerializer xmlizer = new(typeof(Password));
-            foreach ((Guid id, Password password) in Passwords) {
-                using StringWriter writer = new();
-                xmlizer.Serialize(writer, password);
-                string xml = writer.ToString();
-                await SecureStorage.SetAsync(id.ToString(), xml);
-            }
+            foreach ((Guid id, Password password) in Passwords)
+                await SecureStorage.SetAsync(id.ToString(), password.ToXml());
         }
 
         /// <summary>
@@ -85,6 +74,22 @@ namespace PassSync.Storage {
         }
 
         /// <summary>
+        /// Removes all existing passwords in place of the given ones
+        /// </summary>
+        /// <param name="passwords"> The new passwords </param>
+        public static async Task ReplaceAll(IEnumerable<Password> passwords) {
+            await LoadTask;
+            await SaveSem.WaitAsync();
+
+            Passwords.Clear();
+            foreach (Password password in passwords)
+                Passwords[password.Id] = password;
+            await Save();
+
+            SaveSem.Release();
+        }
+
+        /// <summary>
         /// Adds the given password
         /// </summary>
         /// <param name="password">The password to add</param>
@@ -92,7 +97,7 @@ namespace PassSync.Storage {
             await LoadTask;
             await SaveSem.WaitAsync();
 
-            Passwords.TryAdd(password.Id, password);
+            Passwords[password.Id] = password;
             await Save();
 
             SaveSem.Release();

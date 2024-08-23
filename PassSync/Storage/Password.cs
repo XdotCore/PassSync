@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml.Serialization;
 
 namespace PassSync.Storage {
     /// <summary>
@@ -116,6 +118,49 @@ namespace PassSync.Storage {
             availableIndeces.RemoveAt(index);
 
             password[index] = category[RandomNumberGenerator.GetInt32(category.Length)];
+        }
+
+        /// <summary>
+        /// Converts the password to xml
+        /// </summary>
+        /// <returns> The xml representation of the password </returns>
+        public string ToXml() {
+            XmlSerializer xmlizer = new(typeof(Password));
+            using StringWriter writer = new();
+            xmlizer.Serialize(writer, this);
+            return writer.ToString();
+        }
+
+        /// <summary>
+        /// Converts the xml to a password
+        /// </summary>
+        /// <param name="xml">The xml representation of the password</param>
+        /// <returns> The password </returns>
+        public static Password FromXml(string xml) {
+            XmlSerializer xmlizer = new(typeof(Password));
+            using StringReader reader = new(xml);
+            return (Password)xmlizer.Deserialize(reader);
+        }
+
+        /// <summary>
+        /// Returns if the two passwords have the same id, but different values
+        /// </summary>
+        public bool IsConflict(Password other) {
+            if (other == null || Id != other.Id)
+                return false;
+
+            return Text != other.Text ||
+                Name != other.Name ||
+                Username != other.Username ||
+                Url != other.Url ||
+                IsRandom != other.IsRandom ||
+                UpperCase != other.UpperCase ||
+                LowerCase != other.LowerCase ||
+                Numbers != other.Numbers ||
+                Underscore != other.Underscore ||
+                Special != other.Special ||
+                Exclude != other.Exclude ||
+                Length != other.Length;
         }
     }
 }
