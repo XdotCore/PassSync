@@ -5,36 +5,6 @@ on:
   pull_request:
 
 jobs:
-  build-Android:
-
-    runs-on: windows-latest
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Setup Keystore File
-      run: |
-        echo "${{ secrets.KEYSTORE_FILE }}" > passsync.keystore.asc
-        gpg -d --passphrase "${{ secrets.KEYSTORE_PASSWORD_GPG }}" --batch passsync.keystore.asc > PassSync/passsync.keystore
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.0.x
-    - name: Install .NET Maui
-      run: dotnet workload install maui
-    - name: Restore dependencies
-      run: dotnet restore
-    - name: Build
-      run: dotnet build PassSync/PassSync.csproj -c Release -f net8.0-android -p:AndroidKeyStore=true -p:AndroidSigningKeyStore=passsync.keystore -p:AndroidSigningKeyAlias=passsynckey -p:AndroidSigningKeyPass="${{ secrets.KEYSTORE_PASSWORD }}" -p:AndroidSigningStorePass="${{ secrets.KEYSTORE_PASSWORD }}" --no-restore
-    - name: Upload APK
-      uses: actions/upload-artifact@v4.3.6
-      with:
-        name: PassSync-android
-        path: ./PassSync/bin/Release/net8.0-android/com.xdotcore.passsync-Signed.apk
-    - name: Upload AAB
-      uses: actions/upload-artifact@v4.3.6
-      with:
-        name: PassSync-android-aab
-        path: ./PassSync/bin/Release/net8.0-android/com.xdotcore.passsync-Signed.apk
   
   build-Windows:
 
@@ -54,7 +24,7 @@ jobs:
     - name: Install .NET Maui
       run: dotnet workload install maui
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore -p:RuntimeIdentifierOverride=win10-x64
     - name: Build Portable
       run: dotnet publish PassSync/PassSync.csproj -c Release -f net8.0-windows10.0.19041.0 -p:WindowsPackageType=None -p:WindowsAppSDKSelfContained=true -p:RuntimeIdentifierOverride=win10-x64 --self-contained=true --no-restore
     - name: Upload Portable Folder
