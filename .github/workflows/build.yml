@@ -1,13 +1,8 @@
-# This workflow will build a .NET project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
-
-name: .NET
+name: Build Binaries
 
 on:
   push:
-    branches: [ "main" ]
   pull_request:
-    branches: [ "main" ]
 
 jobs:
   build:
@@ -30,9 +25,13 @@ jobs:
       run: dotnet restore
     - name: Build
       run: dotnet build PassSync/PassSync.csproj -c Release -f net8.0-android -p:AndroidKeyStore=true -p:AndroidSigningKeyStore=passsync.keystore -p:AndroidSigningKeyAlias=passsynckey -p:AndroidSigningKeyPass="${{ secrets.KEYSTORE_PASSWORD }}" -p:AndroidSigningStorePass="${{ secrets.KEYSTORE_PASSWORD }}" --no-restore
-    - name: Upload Build Artifacts
+    - name: Upload APK
       uses: actions/upload-artifact@v4.3.6
       with:
-        path: |
-          ./**/*.aab
-          ./**/*.apk
+        name: PassSync-android
+        path: ./PassSync/bin/Release/net8.0-android/com.xdotcore.passsync-Signed.apk
+    - name: Upload AAB
+      uses: actions/upload-artifact@v4.3.6
+      with:
+        name: PassSync-android-aab
+        path: ./PassSync/bin/Release/net8.0-android/com.xdotcore.passsync-Signed.apk
