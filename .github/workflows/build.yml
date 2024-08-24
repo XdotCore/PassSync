@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  build:
+  build-Android:
 
     runs-on: windows-latest
 
@@ -35,3 +35,38 @@ jobs:
       with:
         name: PassSync-android-aab
         path: ./PassSync/bin/Release/net8.0-android/com.xdotcore.passsync-Signed.apk
+  
+  build-Windows:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup PFX File
+      run: |
+        echo "${{ secrets.PFX_FILE }}" > cert.pfx.asc
+        certutil -decode cert.pfx.asc cert.pfx
+        certutil -user -q -p ${{ secrets.PFX_PASSWORD }} -importpfx cert.pfx NoRoot
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+    - name: Install .NET Maui
+      run: dotnet workload install maui
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Build Portable
+      run: dotnet publish PassSync/PassSync.csproj -c Release -f net8.0-windows10.0.19041.0 -p:WindowsPackageType=None -p:WindowsAppSDKSelfContained=true --self-contained=true --no-restore
+    - name: Upload Portable Folder
+      uses: actions/upload-artifact@v4.3.6
+      with:
+        name: PassSync-windows-portable
+        path: ./**/publish/**/*.*
+    - name: Build MSIX Installer
+      run: dotnet publish PassSync/PassSync.csproj -c Release -f net8.0-windows10.0.19041.0 -p:AppxPackageSigningEnabled=true -p:PackageCertificateThumbprint="${{ secrets.PFX_THUMBPRINT }}" --self-contained=true --no-restore
+    - name: Upload MSIX Installer
+      uses: actions/upload-artifact@v4.3.6
+      with:
+        name: PassSync-windows-msix
+        path: ./**/AppPackages/PassSync*/**/*.*
+
