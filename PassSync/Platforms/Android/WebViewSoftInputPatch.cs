@@ -2,6 +2,8 @@
  * Fix taken from from https://github.com/dotnet/maui/issues/14197#issuecomment-1535561632 by Yu-Core
  */
 
+#pragma warning disable CS0618
+
 using Android.Content.Res;
 using Android.Views;
 using Android.Widget;
