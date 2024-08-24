@@ -54,16 +54,16 @@ jobs:
     - name: Install .NET Maui
       run: dotnet workload install maui
     - name: Restore dependencies
-      run: dotnet restore -p:RuntimeIdentifierOverride=win-x64
+      run: dotnet restore
     - name: Build Portable
-      run: dotnet publish PassSync/PassSync.csproj -c Release -f net8.0-windows10.0.19041.0 -p:WindowsPackageType=None -p:WindowsAppSDKSelfContained=true -p:RuntimeIdentifierOverride=win-x64 --self-contained=true --no-restore
+      run: dotnet publish PassSync/PassSync.csproj -c Release -f net8.0-windows10.0.19041.0 -p:WindowsPackageType=None -p:WindowsAppSDKSelfContained=true --no-restore
     - name: Upload Portable Folder
       uses: actions/upload-artifact@v4.3.6
       with:
         name: PassSync-windows-portable
         path: ./**/publish/**/*.*
     - name: Build MSIX Installer
-      run: dotnet publish PassSync/PassSync.csproj -c Release -f net8.0-windows10.0.19041.0 -p:AppxPackageSigningEnabled=true -p:PackageCertificateThumbprint="${{ secrets.PFX_THUMBPRINT }}"-p:RuntimeIdentifierOverride=win10-x64 --self-contained=true --no-restore
+      run: dotnet publish PassSync/PassSync.csproj -c Release -f net8.0-windows10.0.19041.0 -p:AppxPackageSigningEnabled=true -p:PackageCertificateThumbprint="${{ secrets.PFX_THUMBPRINT }}" --no-restore
     - name: Upload MSIX Installer
       uses: actions/upload-artifact@v4.3.6
       with:

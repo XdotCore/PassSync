@@ -30,8 +30,8 @@
     </PropertyGroup>
 
     <!-- needed for publishing windows, see maui publish windows docs -->
-    <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows' and '$(RuntimeIdentifierOverride)' != ''">
-        <RuntimeIdentifier>$(RuntimeIdentifierOverride)</RuntimeIdentifier>
+    <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+        <SelfContained>true</SelfContained>
     </PropertyGroup>
 
     <ItemGroup>
