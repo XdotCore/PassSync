@@ -63,20 +63,22 @@
         <PackageReference Include="System.Text.Json" Version="8.0.4" />
     </ItemGroup>
 
-	<Target Name="Download Bootstrap Icons">
+	<ItemGroup>
+		<Content Remove="download\**" />
+		<None Remove="download\**" />
+	</ItemGroup>
+
+	<Target Name="DownloadBootstrapIcons">
 		<DownloadFile SourceUrl="https://github.com/twbs/icons/releases/download/v1.11.3/bootstrap-icons-1.11.3.zip" DestinationFolder="download">
 			<Output TaskParameter="DownloadedFile" ItemName="BootstrapIcons" />
 		</DownloadFile>
 	</Target>
 
-	<Target Name="Unzip Bootstrap Icons" BeforeTargets="Build" DependsOnTargets="Download Bootstrap Icons">
+	<Target Name="UnzipBootstrapIcons" BeforeTargets="PrepareForBuild" DependsOnTargets="DownloadBootstrapIcons">
 		<Unzip SourceFiles="@(BootstrapIcons)" DestinationFolder="download" />
 	</Target>
 
 	<ItemGroup>
-		<Content Remove="download\**" />
-		<None Remove="download\**" />
-		
 		<Content Include="download/bootstrap-icons-1.11.3/**/*.*">
 			<Link>wwwroot/bootstrap-icons/%(RecursiveDir)%(Filename)%(Extension)</Link>
 		</Content>
