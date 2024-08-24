@@ -399,3 +399,6 @@ FodyWeavers.xsd
 
 # Keystore Files
 *.keystore
+
+# downloaded files
+download/

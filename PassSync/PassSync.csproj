@@ -1,17 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
 
     <PropertyGroup>
-        <TargetFrameworks>net8.0-android;net8.0-ios;net8.0-maccatalyst</TargetFrameworks>
+        <TargetFrameworks>net8.0-android;</TargetFrameworks>
         <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net8.0-windows10.0.19041.0</TargetFrameworks>
-        <!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
-        <!-- <TargetFrameworks>$(TargetFrameworks);net8.0-tizen</TargetFrameworks> -->
-
-        <!-- Note for MacCatalyst:
-            The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
-            When specifying both architectures, use the plural <RuntimeIdentifiers> instead of the singular <RuntimeIdentifier>.
-            The Mac App Store will NOT accept apps with ONLY maccatalyst-arm64 indicated;
-            either BOTH runtimes must be indicated or ONLY macatalyst-x64. -->
-        <!-- For example: <RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers> -->
 
         <OutputType>Exe</OutputType>
         <RootNamespace>PassSync</RootNamespace>
@@ -59,6 +50,7 @@
 
     <ItemGroup>
         <PackageReference Include="Blazor.Bootstrap" Version="2.2.0" />
+        <PackageReference Include="bootstrap" Version="5.3.3" />
         <PackageReference Include="InTheHand.BluetoothLE" Version="4.0.36" />
         <PackageReference Include="InTheHand.Net.Bluetooth" Version="4.1.43" />
         <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.8" />
@@ -70,5 +62,24 @@
         <PackageReference Include="System.Formats.Asn1" Version="8.0.1" />
         <PackageReference Include="System.Text.Json" Version="8.0.4" />
     </ItemGroup>
+
+	<Target Name="Download Bootstrap Icons">
+		<DownloadFile SourceUrl="https://github.com/twbs/icons/releases/download/v1.11.3/bootstrap-icons-1.11.3.zip" DestinationFolder="download">
+			<Output TaskParameter="DownloadedFile" ItemName="BootstrapIcons" />
+		</DownloadFile>
+	</Target>
+
+	<Target Name="Unzip Bootstrap Icons" BeforeTargets="Build" DependsOnTargets="Download Bootstrap Icons">
+		<Unzip SourceFiles="@(BootstrapIcons)" DestinationFolder="download" />
+	</Target>
+
+	<ItemGroup>
+		<Content Remove="download\**" />
+		<None Remove="download\**" />
+		
+		<Content Include="download/bootstrap-icons-1.11.3/**/*.*">
+			<Link>wwwroot/bootstrap-icons/%(RecursiveDir)%(Filename)%(Extension)</Link>
+		</Content>
+	</ItemGroup>
 
 </Project>
