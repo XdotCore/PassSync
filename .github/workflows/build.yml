@@ -54,7 +54,7 @@ jobs:
     - name: Install .NET Maui
       run: dotnet workload install maui
     - name: Restore dependencies
-      run: dotnet restore -p:RuntimeIdentifierOverride=win-x64
+      run: dotnet restore
     - name: Build Portable
       run: dotnet publish PassSync/PassSync.csproj -c Release -f net8.0-windows10.0.19041.0 -p:WindowsPackageType=None -p:WindowsAppSDKSelfContained=true -p:RuntimeIdentifierOverride=win10-x64 --self-contained=true --no-restore
     - name: Upload Portable Folder
