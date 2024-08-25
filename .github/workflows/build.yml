@@ -2,7 +2,17 @@ name: Build Binaries
 
 on:
   push:
+    paths-ignore:
+      - '**.md'
+      - '**/LICENSE'
+      - '**/.gitattributes'
+      - '**/.gitignore'
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - '**/LICENSE'
+      - '**/gitattributes'
+      - '**/.gitignore'
 
 jobs:
   build-Android:
