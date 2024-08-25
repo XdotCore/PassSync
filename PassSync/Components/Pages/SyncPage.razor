@@ -14,10 +14,10 @@
 @using System.Text
 
 @if (!HasBluetoothPermission) {
-    <p>Please enable bluetooth and fine location for this app in settings.</p>
+    <p>Please enable bluetooth for this app in settings.</p>
 }
 
-@if (!IsBluetoothOn) {
+@if (!IsBluetoothOn && HasBluetoothPermission) {
     <p>Please enable bluetooth.</p>
 }
 
