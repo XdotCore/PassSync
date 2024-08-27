@@ -5,6 +5,7 @@
 @using InTheHand.Bluetooth
 @using InTheHand.Net.Bluetooth
 @using InTheHand.Net.Sockets
+@using Microsoft.AspNetCore.DataProtection
 @using Microsoft.Maui.ApplicationModel
 @using Microsoft.Maui.Controls
 @using System.IO
@@ -12,6 +13,8 @@
 @using PassSync.Components.Components
 @using PassSync.Storage
 @using System.Text
+@using System.Security.Cryptography
+@using System.ComponentModel.DataAnnotations
 
 @if (!HasBluetoothPermission) {
     <p>Please enable bluetooth for this app in settings.</p>
@@ -68,6 +71,15 @@ else {
                 <text>Waiting for input on other device</text>
                 <Spinner />
                 break;
+            case TransferStatus.ShowCode:
+                <text>Input the following code on the other device</text>
+                <h3>@Code</h3>
+                break;
+            case TransferStatus.InputCode:
+                <text>Input here the code from the other device</text>
+                <NumberInput TValue="int" @bind-Value=Code Placeholder="Enter 6 digit code" Step=0 />
+                <div class="red" hidden=@(Code >= CodeMin && Code <= CodeMax)>The code will always be an 6 digit number</div>
+                break;
             case TransferStatus.Transferring:
                 <text>Making sync transfer</text>
                 <Spinner />
@@ -99,6 +111,12 @@ else {
                 break;
             case TransferStatus.IsClient:
                 break;
+            case TransferStatus.ShowCode:
+                break;
+            case TransferStatus.InputCode:
+                <Button Color=ButtonColor.Secondary @onclick=StatusModal.HideAsync>Cancel</Button>
+                <Button Color=ButtonColor.Primary @onclick=@(() => IsConfirmed = true) Disabled=@(Code < CodeMin || Code > CodeMax)>Confirm</Button>
+                break;
             case TransferStatus.Transferring:
                 break;
             case TransferStatus.Conflict:
@@ -127,6 +145,11 @@ else {
     private TransferStatus Status { get; set; }
     private bool IsCancelled { get; set; }
     private bool IsConfirmed { get; set; }
+
+    private int Code { get; set; }
+    private const int CodeMin = 100000;
+    private const int CodeMax = 999999;
+
     private List<Password> Conflicts { get; set; } = [];
     private int ConflictChosen { get; set; }
 
@@ -219,12 +242,41 @@ else {
                 return;
             }
 
-            await SetStatus(TransferStatus.Transferring);
-
             using Stream stream = client.GetStream();
+
+            // send byte of confirmation (any value)
+            await stream.WriteAsync(new byte[1]);
+            await stream.FlushAsync();
+
+            Code = RandomNumberGenerator.GetInt32(CodeMin, CodeMax);
+            await SetStatus(TransferStatus.ShowCode);
+
+            // wait for same code confirmation
+            byte[] recCode = new byte[4];
+            await stream.ReadExactlyAsync(recCode, 0, 4);
+            int code = BitConverter.ToInt32(recCode);
+
+            if (code == -1) {
+                await Application.Current.MainPage.DisplayAlert(null, "Input code was canceled on other device", "Okay");
+                return;
+            }
+
+            // send boolean confirmation back
+            bool isSame = code == Code;
+            await stream.WriteAsync(BitConverter.GetBytes(isSame));
+            await stream.FlushAsync();
+
+            if (!isSame) {
+                await Application.Current.MainPage.DisplayAlert(null, "Inputted code does not match.", "Okay");
+                return;
+            }
+
+            await SetStatus(TransferStatus.Transferring);
 
             IEnumerable<Password> thisPasswords = await PasswordManager.GetAll();
             IEnumerable<Password> otherPasswords = await RecievePasswords(stream);
+            if (otherPasswords == null)
+                return;
             List<Password> newList = new(thisPasswords.Concat(otherPasswords));
 
             // resolve conflicts and duplicates
@@ -255,7 +307,8 @@ else {
 
             await SetStatus(TransferStatus.Transferring);
 
-            await SendPasswords(stream, newList);
+            if (!await SendPasswords(stream, newList))
+                return;
 
             await SetStatus(TransferStatus.Confirm);
 
@@ -273,20 +326,66 @@ else {
     // returns false if it successfully determined that this device should be host
     private async Task<bool> BeClient() {
         try {
-            using BluetoothClient client = new();
-            await client.ConnectAsync(ConnectedDevice.DeviceAddress, AppGuid);
+            using BluetoothClient client = new() { Authenticate = true };
+            // this call is blocking on android
+            if (!OperatingSystem.IsAndroid())
+                await client.ConnectAsync(ConnectedDevice.DeviceAddress, AppGuid);
+            else {
+                bool triedConnecting = false;
+                _ = Task.Run(async () => {
+                    try {
+                        await client.ConnectAsync(ConnectedDevice.DeviceAddress, AppGuid);
+                    } catch {}
+                    triedConnecting = true;
+                });
+                while (!triedConnecting)
+                    await Task.Delay(25);
+            }
 
             if (!client.Connected)
                 return false;
 
+            using Stream stream = client.GetStream();
+
             await SetStatus(TransferStatus.IsClient);
 
-            using Stream stream = client.GetStream();
+            // wait for confirmation byte (any value)
+            await stream.ReadExactlyAsync(new byte[1], 0, 1);
+
+            Code = 0;
+            await SetStatus(TransferStatus.InputCode);
+
+            IsConfirmed = IsCancelled = false;
+            while (!IsConfirmed && !IsCancelled)
+                await Task.Delay(25);
+
+            // return impossible code to cancel
+            if (IsCancelled) {
+                await stream.WriteAsync(BitConverter.GetBytes(-1));
+                await stream.FlushAsync();
+                return true;
+            }
+
+            // send back inputted value
+            await stream.WriteAsync(BitConverter.GetBytes(Code));
+            await stream.FlushAsync();
+
+            // get back boolean confirmation on if it is the same
+            byte[] isSame = new byte[1];
+            await stream.ReadExactlyAsync(isSame, 0, 1);
+
+            if (!BitConverter.ToBoolean(isSame)) {
+                await Application.Current.MainPage.DisplayAlert(null, "Inputted code does not match.", "Okay");
+                return true;
+            }
 
             await SetStatus(TransferStatus.Transferring);
 
-            await SendPasswords(stream, await PasswordManager.GetAll());
+            if (!await SendPasswords(stream, await PasswordManager.GetAll()))
+                return true;
             IEnumerable<Password> passwords = await RecievePasswords(stream);
+            if (passwords == null)
+                return true;
 
             await SetStatus(TransferStatus.Confirm);
 
@@ -311,12 +410,15 @@ else {
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task SendPasswords(Stream stream, IEnumerable<Password> passwords) {
+    private async Task<bool> SendPasswords(Stream stream, IEnumerable<Password> passwords) {
+        byte[] boolBuffer = new byte[1];
+
         // write count of passwords
         await stream.WriteAsync(BitConverter.GetBytes(passwords.Count()));
         await stream.FlushAsync();
 
         foreach (Password password in passwords) {
+            // to xml
             string xml = password.ToXml();
             byte[] bytes = Encoding.UTF8.GetBytes(xml);
 
@@ -324,32 +426,55 @@ else {
             await stream.WriteAsync(BitConverter.GetBytes(bytes.Length));
             await stream.WriteAsync(bytes);
             await stream.FlushAsync();
+
+            // wait for confirmation
+            await stream.ReadExactlyAsync(boolBuffer, 0, 1);
+            if (!BitConverter.ToBoolean(boolBuffer)) {
+                await Application.Current.MainPage.DisplayAlert(null, $"Failed to send password {password.Name}, canceling sync", "Okay");
+                return false;
+            }
         }
+
+        return true;
     }
 
     private async Task<IEnumerable<Password>> RecievePasswords(Stream stream) {
-        byte[] intBytes = new byte[4];
+        byte[] intBuffer = new byte[4];
 
         // read count of passwords
-        await stream.ReadExactlyAsync(intBytes, 0, 4);
+        await stream.ReadExactlyAsync(intBuffer, 0, 4);
 
         List<Password> passwords = [];
-        for (int i = BitConverter.ToInt32(intBytes); i > 0; i--) {
+        for (int i = BitConverter.ToInt32(intBuffer); i > 0; i--) {
             // read length of bytes and bytes
-            await stream.ReadExactlyAsync(intBytes, 0, 4);
-            byte[] bytes = new byte[BitConverter.ToInt32(intBytes)];
+            await stream.ReadExactlyAsync(intBuffer, 0, 4);
+            byte[] bytes = new byte[BitConverter.ToInt32(intBuffer)];
             await stream.ReadExactlyAsync(bytes, 0, bytes.Length);
 
+            // from xml
+            bool success = true;
             string xml = Encoding.UTF8.GetString(bytes);
-            passwords.Add(Password.FromXml(xml));
+            try {
+                passwords.Add(Password.FromXml(xml));
+            } catch (InvalidOperationException e) {
+                await Application.Current.MainPage.DisplayAlert($"Failed to deserialize password", e.ToString(), "Okay");
+                success = false;
+            }
+            // write confirmation
+            await stream.WriteAsync(BitConverter.GetBytes(success));
+            await stream.FlushAsync();
+            if (!success)
+                return null;
         }
+
         return passwords;
     }
 
     private enum TransferStatus {
         AttemptingClient,
         Listening,
-        UserPrompt,
+        ShowCode,
+        InputCode,
         IsClient,
         Transferring,
         Conflict,
