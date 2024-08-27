@@ -9,7 +9,8 @@
    - [X] Store additional info (e.g. username, website)
  - [X] Synchronize passwords over Bluetooth
    - [X] Show password conflicts (same id, different data)
-   - [ ] Use ASP.NET Data Protection
+   - [X] Require authenticated bluetooth connection
+   - [X] Random number prompt confirmation
  - [ ] Editing passwords
    - [ ] Generate new passwords and record old ones
    - [ ] Edit additional info
