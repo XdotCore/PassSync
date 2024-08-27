@@ -44,7 +44,7 @@ jobs:
       uses: actions/upload-artifact@v4.3.6
       with:
         name: PassSync-android-aab
-        path: ./PassSync/bin/Release/net8.0-android/com.xdotcore.passsync-Signed.apk
+        path: ./PassSync/bin/Release/net8.0-android/com.xdotcore.passsync-Signed.aab
   
   build-Windows:
 
